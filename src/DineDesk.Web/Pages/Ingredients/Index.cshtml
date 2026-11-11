@@ -1,0 +1,42 @@
+@page
+@model DineDesk.Web.Pages.Ingredients.IndexModel
+@{
+    ViewData["Title"] = "Ingredients";
+}
+
+<h1 class="mb-4">Ingredient Stock</h1>
+
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="alert alert-danger">@Model.ErrorMessage</div>
+}
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Unit</th>
+            <th>In stock</th>
+            <th>Reorder threshold</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var ingredient in Model.Ingredients)
+        {
+            <tr class="@(ingredient.QuantityInStock <= ingredient.ReorderThreshold ? "table-warning" : "")">
+                <td>@ingredient.Name</td>
+                <td>@ingredient.UnitOfMeasure</td>
+                <td>@ingredient.QuantityInStock</td>
+                <td>@ingredient.ReorderThreshold</td>
+                <td>
+                    <form method="post" asp-page-handler="Restock" class="d-flex gap-1">
+                        <input type="hidden" name="IngredientId" value="@ingredient.Id" />
+                        <input type="number" step="0.01" min="0.01" name="QuantityToAdd" class="form-control form-control-sm" placeholder="Add qty" required />
+                        <button type="submit" class="btn btn-sm btn-outline-primary">Restock</button>
+                    </form>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
