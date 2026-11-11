@@ -12,7 +12,7 @@ public class MenuItem
 
     public bool IsHappyHourEligible { get; set; }
 
-    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+    public byte[] RowVersion { get; set; } = null!;
 
     public ICollection<MenuItemIngredient> Recipe { get; set; } = new List<MenuItemIngredient>();
 }

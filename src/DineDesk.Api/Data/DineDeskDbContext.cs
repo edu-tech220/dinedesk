@@ -102,10 +102,42 @@ public class DineDeskDbContext : DbContext
         }
         else
         {
-            property
-                .IsConcurrencyToken()
-                .ValueGeneratedOnAddOrUpdate()
-                .HasValueGenerator<RowVersionValueGenerator>();
+            // No native rowversion/timestamp column on this provider: keep it a plain column
+            // (ValueGenerated stays Never, so it's never excluded from INSERT/UPDATE) and stamp
+            // a fresh token ourselves on every save - see StampPortableRowVersions below.
+            property.IsConcurrencyToken();
+        }
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        if (!Database.IsSqlServer())
+        {
+            StampPortableRowVersions();
+        }
+
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        if (!Database.IsSqlServer())
+        {
+            StampPortableRowVersions();
+        }
+
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void StampPortableRowVersions()
+    {
+        foreach (var entry in ChangeTracker.Entries().Where(e => e.State is EntityState.Added or EntityState.Modified))
+        {
+            var rowVersionProperty = entry.Properties.FirstOrDefault(p => p.Metadata.Name == nameof(Ingredient.RowVersion));
+            if (rowVersionProperty is not null)
+            {
+                rowVersionProperty.CurrentValue = Guid.NewGuid().ToByteArray();
+            }
         }
     }
 }
