@@ -1,0 +1,136 @@
+@page "{id:int}"
+@model DineDesk.Web.Pages.Tabs.DetailsModel
+@{
+    ViewData["Title"] = $"Tab #{Model.Tab?.Id}";
+}
+
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="alert alert-danger">@Model.ErrorMessage</div>
+}
+
+@if (Model.Tab is null)
+{
+    <p>Tab not found.</p>
+    return;
+}
+
+<h1 class="mb-3">Table @Model.Tab.TableNumber &mdash; Tab #@Model.Tab.Id</h1>
+<p>Status: <span class="badge bg-info text-dark">@Model.Tab.Status</span> &middot; Guests: @Model.Tab.GuestCount</p>
+
+<div class="row">
+    <div class="col-md-7">
+        <h3>Orders</h3>
+        @foreach (var order in Model.Tab.Orders)
+        {
+            <div class="card mb-2">
+                <div class="card-header">Round placed @order.PlacedAtUtc.ToLocalTime().ToString("g")</div>
+                <ul class="list-group list-group-flush">
+                    @foreach (var item in order.Items)
+                    {
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>
+                                @item.Quantity &times; @item.MenuItemName
+                                @if (!string.IsNullOrEmpty(item.GuestLabel))
+                                {
+                                    <span class="text-muted">(@item.GuestLabel)</span>
+                                }
+                            </span>
+                            <span>
+                                @item.UnitPrice.ToString("C")
+                                <span class="badge bg-secondary">@item.Status</span>
+                            </span>
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+
+        <h4 class="mt-4">Add items to this tab</h4>
+        <form method="post" asp-page-handler="AddItem">
+            <input type="hidden" name="TabId" value="@Model.Tab.Id" />
+            <div class="row g-2 align-items-end">
+                <div class="col-md-5">
+                    <label class="form-label">Menu item</label>
+                    <select name="MenuItemId" class="form-select">
+                        @foreach (var item in Model.AvailableMenu)
+                        {
+                            <option value="@item.Id">@item.Name (@item.Price.ToString("C"))</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Qty</label>
+                    <input type="number" name="Quantity" min="1" value="1" class="form-control" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Guest label (optional)</label>
+                    <input type="text" name="GuestLabel" class="form-control" placeholder="Guest 1" />
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">Add</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div class="col-md-5">
+        <h3>Bill</h3>
+        @if (Model.Bill is not null)
+        {
+            <table class="table">
+                <tr><td>Subtotal</td><td class="text-end">@Model.Bill.Subtotal.ToString("C")</td></tr>
+                <tr><td>Tax (@((Model.Bill.TaxRate * 100).ToString("0.#"))%)</td><td class="text-end">@Model.Bill.Tax.ToString("C")</td></tr>
+                <tr><td>Tip</td><td class="text-end">@Model.Bill.Tip.ToString("C")</td></tr>
+                <tr class="fw-bold"><td>Total</td><td class="text-end">@Model.Bill.Total.ToString("C")</td></tr>
+                <tr><td>Paid</td><td class="text-end">@Model.Bill.AmountPaid.ToString("C")</td></tr>
+                <tr class="fw-bold"><td>Balance due</td><td class="text-end">@Model.Bill.BalanceDue.ToString("C")</td></tr>
+            </table>
+        }
+
+        <h4>Record a payment</h4>
+        <form method="post" asp-page-handler="AddPayment" class="mb-4">
+            <input type="hidden" name="TabId" value="@Model.Tab.Id" />
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <input type="text" name="GuestLabel" class="form-control" placeholder="Guest (optional)" />
+                </div>
+                <div class="col-md-4">
+                    <input type="number" step="0.01" min="0.01" name="Amount" class="form-control" placeholder="Amount" required />
+                </div>
+                <div class="col-md-3">
+                    <select name="Method" class="form-select">
+                        <option value="Cash">Cash</option>
+                        <option value="Card">Card</option>
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-outline-primary w-100">Pay</button>
+                </div>
+            </div>
+        </form>
+
+        <h4>Split evenly (preview)</h4>
+        <form method="post" asp-page-handler="PreviewSplit" class="mb-3">
+            <input type="hidden" name="TabId" value="@Model.Tab.Id" />
+            <div class="input-group">
+                <input type="number" name="SplitCount" min="1" value="2" class="form-control" />
+                <button type="submit" class="btn btn-outline-secondary">Preview</button>
+            </div>
+        </form>
+        @if (Model.SplitShares is not null)
+        {
+            <ul>
+                @for (var i = 0; i < Model.SplitShares.Count; i++)
+                {
+                    <li>Guest @(i + 1): @Model.SplitShares[i].ToString("C")</li>
+                }
+            </ul>
+        }
+
+        <form method="post" asp-page-handler="CloseTab">
+            <input type="hidden" name="TabId" value="@Model.Tab.Id" />
+            <button type="submit" class="btn btn-success" @(Model.Tab.Status != "Open" ? "disabled" : "")>Close tab</button>
+        </form>
+    </div>
+</div>

@@ -1,10 +1,45 @@
-﻿@page
-@model IndexModel
+@page
+@model DineDesk.Web.Pages.IndexModel
 @{
-    ViewData["Title"] = "Home page";
+    ViewData["Title"] = "Tables";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<h1 class="mb-4">Dining Tables</h1>
+
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="alert alert-danger">@Model.ErrorMessage</div>
+}
+
+<div class="row row-cols-1 row-cols-md-3 g-3">
+    @foreach (var table in Model.Tables)
+    {
+        <div class="col">
+            <div class="card h-100 @(table.Status == "Free" ? "border-success" : "border-warning")">
+                <div class="card-body">
+                    <h5 class="card-title">Table @table.Number</h5>
+                    <p class="card-text">Capacity: @table.Capacity</p>
+                    <span class="badge @(table.Status == "Free" ? "bg-success" : "bg-warning text-dark")">@table.Status</span>
+
+                    @if (table.Status == "Free")
+                    {
+                        <form method="post" asp-page-handler="OpenTab" class="mt-3">
+                            <input type="hidden" name="TableId" value="@table.Id" />
+                            <div class="input-group">
+                                <input type="number" name="GuestCount" min="1" value="2" class="form-control" aria-label="Guest count" />
+                                <button type="submit" class="btn btn-primary">Open tab</button>
+                            </div>
+                        </form>
+                    }
+                    else
+                    {
+                        <form method="post" asp-page-handler="GoToTab" class="mt-3">
+                            <input type="hidden" name="TableId" value="@table.Id" />
+                            <button type="submit" class="btn btn-outline-secondary">View tab</button>
+                        </form>
+                    }
+                </div>
+            </div>
+        </div>
+    }
 </div>
