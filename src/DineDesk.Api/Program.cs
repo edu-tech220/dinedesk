@@ -1,5 +1,8 @@
+using DineDesk.Api.BackgroundServices;
 using DineDesk.Api.Data;
 using DineDesk.Api.Data.Seed;
+using DineDesk.Api.Options;
+using DineDesk.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,6 +16,17 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddDbContext<DineDeskDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DineDesk")));
+
+builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
+builder.Services.Configure<BillingOptions>(builder.Configuration.GetSection(BillingOptions.SectionName));
+
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IHappyHourPricingService, HappyHourPricingService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<ITabService, TabService>();
+builder.Services.AddScoped<IMenuService, MenuService>();
+builder.Services.AddScoped<IIngredientService, IngredientService>();
+builder.Services.AddHostedService<StockWatcherService>();
 
 var app = builder.Build();
 
