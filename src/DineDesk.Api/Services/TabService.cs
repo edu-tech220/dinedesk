@@ -9,9 +9,21 @@ namespace DineDesk.Api.Services;
 
 public record BillSummary(decimal Subtotal, decimal TaxRate, decimal Tax, decimal Tip, decimal Total, decimal AmountPaid, decimal BalanceDue);
 
+public record DiningTableSummary(int Id, string Number, int Capacity, TableStatus Status);
+
+public record TabItemDetail(int Id, string MenuItemName, int Quantity, decimal UnitPrice, OrderItemStatus Status, string? GuestLabel, byte[] RowVersion);
+
+public record TabOrderDetail(int OrderId, DateTime PlacedAtUtc, IReadOnlyList<TabItemDetail> Items);
+
+public record TabDetail(int Id, int DiningTableId, string TableNumber, int GuestCount, TabStatus Status, DateTime OpenedAtUtc, IReadOnlyList<TabOrderDetail> Orders);
+
 public interface ITabService
 {
+    Task<IReadOnlyList<DiningTableSummary>> GetTablesAsync();
+
     Task<ServiceResult<Tab>> OpenTabAsync(int tableId, int guestCount, int openedByUserId);
+
+    Task<ServiceResult<TabDetail>> GetTabAsync(int tabId);
 
     Task<ServiceResult<BillSummary>> GetBillAsync(int tabId);
 
@@ -33,6 +45,15 @@ public class TabService : ITabService
     {
         _db = db;
         _billingOptions = billingOptions.Value;
+    }
+
+    public async Task<IReadOnlyList<DiningTableSummary>> GetTablesAsync()
+    {
+        return await _db.DiningTables
+            .AsNoTracking()
+            .OrderBy(t => t.Number)
+            .Select(t => new DiningTableSummary(t.Id, t.Number, t.Capacity, t.Status))
+            .ToListAsync();
     }
 
     public async Task<ServiceResult<Tab>> OpenTabAsync(int tableId, int guestCount, int openedByUserId)
@@ -67,6 +88,32 @@ public class TabService : ITabService
 
         await _db.SaveChangesAsync();
         return ServiceResult<Tab>.Success(tab);
+    }
+
+    public async Task<ServiceResult<TabDetail>> GetTabAsync(int tabId)
+    {
+        var tab = await _db.Tabs
+            .AsNoTracking()
+            .Include(t => t.DiningTable)
+            .Include(t => t.Orders)
+            .ThenInclude(o => o.Items)
+            .ThenInclude(i => i.MenuItem)
+            .FirstOrDefaultAsync(t => t.Id == tabId);
+
+        if (tab is null)
+        {
+            return ServiceResult<TabDetail>.Failure("Tab not found.", ServiceErrorType.NotFound);
+        }
+
+        var orders = tab.Orders
+            .OrderBy(o => o.PlacedAtUtc)
+            .Select(o => new TabOrderDetail(
+                o.Id,
+                o.PlacedAtUtc,
+                o.Items.Select(i => new TabItemDetail(i.Id, i.MenuItem.Name, i.Quantity, i.UnitPrice, i.Status, i.GuestLabel, i.RowVersion)).ToList()))
+            .ToList();
+
+        return ServiceResult<TabDetail>.Success(new TabDetail(tab.Id, tab.DiningTableId, tab.DiningTable.Number, tab.GuestCount, tab.Status, tab.OpenedAtUtc, orders));
     }
 
     public async Task<ServiceResult<BillSummary>> GetBillAsync(int tabId)

@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DineDesk.Api.Services;
 
-public record MenuItemSummary(int Id, string Name, string Category, decimal Price, bool IsAvailable, bool IsHappyHourEligible);
+public record MenuItemSummary(int Id, string Name, string Category, decimal Price, bool IsAvailable, bool IsHappyHourEligible, byte[] RowVersion);
 
 public record MenuItemRecipeLine(int IngredientId, decimal QuantityRequired);
 
@@ -46,7 +46,7 @@ public class MenuService : IMenuService
             .ThenBy(m => m.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(m => new MenuItemSummary(m.Id, m.Name, m.Category, m.Price, m.IsAvailable, m.IsHappyHourEligible))
+            .Select(m => new MenuItemSummary(m.Id, m.Name, m.Category, m.Price, m.IsAvailable, m.IsHappyHourEligible, m.RowVersion))
             .ToListAsync();
 
         return new PagedResult<MenuItemSummary>(items, page, pageSize, totalCount);

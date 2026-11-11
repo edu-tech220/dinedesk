@@ -13,9 +13,13 @@ public record PlacedOrderItem(int OrderItemId, int MenuItemId, string MenuItemNa
 
 public record PlacedOrder(int OrderId, int TabId, DateTime PlacedAtUtc, IReadOnlyList<PlacedOrderItem> Items);
 
+public record KitchenQueueItem(int Id, string MenuItemName, int Quantity, OrderItemStatus Status, string TableNumber, DateTime PlacedAtUtc, byte[] RowVersion);
+
 public interface IOrderService
 {
     Task<ServiceResult<PlacedOrder>> PlaceOrderAsync(int tabId, IReadOnlyList<PlaceOrderLine> lines);
+
+    Task<PagedResult<KitchenQueueItem>> GetKitchenQueueAsync(int page, int pageSize, OrderItemStatus? status);
 
     Task<ServiceResult<bool>> UpdateItemStatusAsync(int orderItemId, OrderItemStatus newStatus, byte[] expectedRowVersion);
 
@@ -168,6 +172,32 @@ public class OrderService : IOrderService
         return ServiceResult<PlacedOrder>.Failure(
             "The order could not be placed due to concurrent stock updates. Please try again.",
             ServiceErrorType.Conflict);
+    }
+
+    public async Task<PagedResult<KitchenQueueItem>> GetKitchenQueueAsync(int page, int pageSize, OrderItemStatus? status)
+    {
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var query = _db.OrderItems
+            .AsNoTracking()
+            .Include(i => i.MenuItem)
+            .Include(i => i.Order)
+            .ThenInclude(o => o.Tab)
+            .ThenInclude(t => t.DiningTable)
+            .Where(i => status.HasValue ? i.Status == status.Value : i.Status != OrderItemStatus.Served && i.Status != OrderItemStatus.Voided)
+            .AsQueryable();
+
+        var totalCount = await query.CountAsync();
+
+        var items = await query
+            .OrderBy(i => i.Order.PlacedAtUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(i => new KitchenQueueItem(i.Id, i.MenuItem.Name, i.Quantity, i.Status, i.Order.Tab.DiningTable.Number, i.Order.PlacedAtUtc, i.RowVersion))
+            .ToListAsync();
+
+        return new PagedResult<KitchenQueueItem>(items, page, pageSize, totalCount);
     }
 
     public async Task<ServiceResult<bool>> UpdateItemStatusAsync(int orderItemId, OrderItemStatus newStatus, byte[] expectedRowVersion)
