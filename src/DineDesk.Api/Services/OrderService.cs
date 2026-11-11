@@ -67,19 +67,19 @@ public class OrderService : IOrderService
         }
 
         var menuItemIds = lines.Select(l => l.MenuItemId).Distinct().ToList();
-        var menuItems = await _db.MenuItems
+        var menuItemsReadOnly = await _db.MenuItems
+            .AsNoTracking()
             .Include(m => m.Recipe)
-            .ThenInclude(r => r.Ingredient)
             .Where(m => menuItemIds.Contains(m.Id))
             .ToDictionaryAsync(m => m.Id);
 
-        var missing = menuItemIds.Where(id => !menuItems.ContainsKey(id)).ToList();
+        var missing = menuItemIds.Where(id => !menuItemsReadOnly.ContainsKey(id)).ToList();
         if (missing.Count > 0)
         {
             return ServiceResult<PlacedOrder>.Failure($"Unknown menu item id(s): {string.Join(", ", missing)}.");
         }
 
-        var unavailable = menuItemIds.Where(id => !menuItems[id].IsAvailable).Select(id => menuItems[id].Name).ToList();
+        var unavailable = menuItemIds.Where(id => !menuItemsReadOnly[id].IsAvailable).Select(id => menuItemsReadOnly[id].Name).ToList();
         if (unavailable.Count > 0)
         {
             return ServiceResult<PlacedOrder>.Failure($"Currently 86'd and cannot be ordered: {string.Join(", ", unavailable)}.", ServiceErrorType.Conflict);
@@ -88,7 +88,7 @@ public class OrderService : IOrderService
         var requiredByIngredient = new Dictionary<int, decimal>();
         foreach (var line in lines)
         {
-            foreach (var recipeLine in menuItems[line.MenuItemId].Recipe)
+            foreach (var recipeLine in menuItemsReadOnly[line.MenuItemId].Recipe)
             {
                 requiredByIngredient.TryGetValue(recipeLine.IngredientId, out var current);
                 requiredByIngredient[recipeLine.IngredientId] = current + recipeLine.QuantityRequired * line.Quantity;
@@ -99,14 +99,24 @@ public class OrderService : IOrderService
         var unitPrices = new Dictionary<int, decimal>();
         foreach (var menuItemId in menuItemIds)
         {
-            unitPrices[menuItemId] = await _pricing.GetCurrentUnitPriceAsync(menuItems[menuItemId], now);
+            unitPrices[menuItemId] = await _pricing.GetCurrentUnitPriceAsync(menuItemsReadOnly[menuItemId], now);
         }
 
         for (var attempt = 1; attempt <= _billingOptions.MaxConcurrencyRetries; attempt++)
         {
+            // Drop any entities left tracked by a previous, conflicting attempt so every retry
+            // re-reads the current database state instead of compounding stale in-memory edits.
+            _db.ChangeTracker.Clear();
+
             var ingredients = await _db.Ingredients
                 .Where(i => requiredByIngredient.Keys.Contains(i.Id))
                 .ToDictionaryAsync(i => i.Id);
+
+            var trackedMenuItems = await _db.MenuItems
+                .Include(m => m.Recipe)
+                .ThenInclude(r => r.Ingredient)
+                .Where(m => menuItemIds.Contains(m.Id))
+                .ToDictionaryAsync(m => m.Id);
 
             var shortages = requiredByIngredient
                 .Where(kv => ingredients[kv.Key].QuantityInStock < kv.Value)
@@ -115,11 +125,19 @@ public class OrderService : IOrderService
 
             if (shortages.Count > 0)
             {
-                await Mark86dItemsAsync(menuItems.Values, ingredients);
-                await _db.SaveChangesAsync();
-                return ServiceResult<PlacedOrder>.Failure(
-                    $"Not enough stock for: {string.Join(", ", shortages)}. The affected item(s) were marked unavailable.",
-                    ServiceErrorType.Conflict);
+                await Mark86dItemsAsync(trackedMenuItems.Values, ingredients);
+
+                try
+                {
+                    await _db.SaveChangesAsync();
+                    return ServiceResult<PlacedOrder>.Failure(
+                        $"Not enough stock for: {string.Join(", ", shortages)}. The affected item(s) were marked unavailable.",
+                        ServiceErrorType.Conflict);
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    continue;
+                }
             }
 
             foreach (var (ingredientId, quantity) in requiredByIngredient)
@@ -127,7 +145,7 @@ public class OrderService : IOrderService
                 ingredients[ingredientId].QuantityInStock -= quantity;
             }
 
-            await Mark86dItemsAsync(menuItems.Values, ingredients);
+            await Mark86dItemsAsync(trackedMenuItems.Values, ingredients);
 
             var order = new Order { TabId = tabId, PlacedAtUtc = DateTime.UtcNow };
             foreach (var line in lines)
@@ -149,23 +167,15 @@ public class OrderService : IOrderService
                 await _db.SaveChangesAsync();
 
                 var placedItems = order.Items
-                    .Select(i => new PlacedOrderItem(i.Id, i.MenuItemId, menuItems[i.MenuItemId].Name, i.Quantity, i.UnitPrice, i.Status))
+                    .Select(i => new PlacedOrderItem(i.Id, i.MenuItemId, menuItemsReadOnly[i.MenuItemId].Name, i.Quantity, i.UnitPrice, i.Status))
                     .ToList();
 
                 return ServiceResult<PlacedOrder>.Success(new PlacedOrder(order.Id, tabId, order.PlacedAtUtc, placedItems));
             }
-            catch (DbUpdateConcurrencyException ex)
+            catch (DbUpdateConcurrencyException)
             {
-                foreach (var entry in ex.Entries)
-                {
-                    await entry.ReloadAsync();
-                }
-
-                _db.Entry(order).State = EntityState.Detached;
-                foreach (var item in order.Items)
-                {
-                    _db.Entry(item).State = EntityState.Detached;
-                }
+                // Loop again; ChangeTracker.Clear() at the top of the next attempt discards
+                // this attempt's in-memory edits so we re-read fresh stock levels.
             }
         }
 
@@ -238,6 +248,8 @@ public class OrderService : IOrderService
 
         for (var attempt = 1; attempt <= _billingOptions.MaxConcurrencyRetries; attempt++)
         {
+            _db.ChangeTracker.Clear();
+
             var item = await _db.OrderItems
                 .Include(i => i.MenuItem)
                 .ThenInclude(m => m.Recipe)
@@ -277,12 +289,9 @@ public class OrderService : IOrderService
                 await _db.SaveChangesAsync();
                 return ServiceResult<bool>.Success(true);
             }
-            catch (DbUpdateConcurrencyException ex)
+            catch (DbUpdateConcurrencyException)
             {
-                foreach (var entry in ex.Entries)
-                {
-                    await entry.ReloadAsync();
-                }
+                // Loop again; ChangeTracker.Clear() at the top of the next attempt re-reads fresh state.
             }
         }
 

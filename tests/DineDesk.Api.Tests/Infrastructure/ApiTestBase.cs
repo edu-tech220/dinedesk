@@ -1,13 +1,19 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using DineDesk.Api.Contracts;
 
 namespace DineDesk.Api.Tests.Infrastructure;
 
 public abstract class ApiTestBase : IDisposable
 {
-    protected static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    // Mirrors the API's JsonStringEnumConverter so enum-valued contracts (TableStatus, etc.)
+    // round-trip the same way a real client would see them, instead of as raw integers.
+    protected static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() },
+    };
 
     protected readonly DineDeskApiFactory Factory;
     protected readonly HttpClient Client;

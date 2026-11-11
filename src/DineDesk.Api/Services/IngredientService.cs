@@ -43,6 +43,8 @@ public class IngredientService : IIngredientService
 
         for (var attempt = 1; attempt <= _billingOptions.MaxConcurrencyRetries; attempt++)
         {
+            _db.ChangeTracker.Clear();
+
             var ingredient = await _db.Ingredients.FirstOrDefaultAsync(i => i.Id == ingredientId);
             if (ingredient is null)
             {

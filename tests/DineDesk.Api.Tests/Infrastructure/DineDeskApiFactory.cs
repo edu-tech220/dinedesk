@@ -13,11 +13,18 @@ namespace DineDesk.Api.Tests.Infrastructure;
 /// SQL Server dependency. Rate limiting is relaxed so a burst of test requests never trips it.</summary>
 public class DineDeskApiFactory : WebApplicationFactory<Program>
 {
-    private readonly SqliteConnection _connection = new("DataSource=:memory:");
+    // A named shared-cache in-memory database (instead of a single shared SqliteConnection)
+    // so concurrent requests each open their own ADO.NET connection - required for the
+    // concurrency tests, since one SqliteConnection object can't run commands from multiple
+    // threads at once. "Default Timeout" makes SQLite wait out writer contention (SQLITE_BUSY)
+    // instead of throwing, mirroring how a real database would just block briefly.
+    private readonly string _connectionString = $"DataSource=file:{Guid.NewGuid()}?mode=memory&cache=shared;Default Timeout=5";
+    private readonly SqliteConnection _keepAliveConnection;
 
     public DineDeskApiFactory()
     {
-        _connection.Open();
+        _keepAliveConnection = new SqliteConnection(_connectionString);
+        _keepAliveConnection.Open();
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -41,7 +48,7 @@ public class DineDeskApiFactory : WebApplicationFactory<Program>
                 services.Remove(descriptor);
             }
 
-            services.AddDbContext<DineDeskDbContext>(options => options.UseSqlite(_connection));
+            services.AddDbContext<DineDeskDbContext>(options => options.UseSqlite(_connectionString));
         });
     }
 
@@ -50,7 +57,7 @@ public class DineDeskApiFactory : WebApplicationFactory<Program>
         base.Dispose(disposing);
         if (disposing)
         {
-            _connection.Dispose();
+            _keepAliveConnection.Dispose();
         }
     }
 }
