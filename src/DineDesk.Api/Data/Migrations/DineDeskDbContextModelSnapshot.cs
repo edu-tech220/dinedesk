@@ -62,11 +62,11 @@ namespace DineDesk.Api.Data.Migrations
                     b.Property<decimal>("DiscountPercentage")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<TimeSpan>("EndsAt")
-                        .HasColumnType("time");
+                    b.Property<long>("EndsAt")
+                        .HasColumnType("bigint");
 
-                    b.Property<TimeSpan>("StartsAt")
-                        .HasColumnType("time");
+                    b.Property<long>("StartsAt")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 

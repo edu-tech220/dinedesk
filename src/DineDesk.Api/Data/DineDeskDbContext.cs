@@ -86,6 +86,17 @@ public class DineDeskDbContext : DbContext
             .HasForeignKey(p => p.TabId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // Store as ticks (a plain integer) rather than relying on each provider's native time
+        // type, so the StartsAt/EndsAt range comparisons in HappyHourPricingService translate
+        // the same way on SQL Server and SQLite.
+        modelBuilder.Entity<HappyHourWindow>()
+            .Property(w => w.StartsAt)
+            .HasConversion(v => v.Ticks, v => TimeSpan.FromTicks(v));
+
+        modelBuilder.Entity<HappyHourWindow>()
+            .Property(w => w.EndsAt)
+            .HasConversion(v => v.Ticks, v => TimeSpan.FromTicks(v));
+
         foreach (var decimalProperty in modelBuilder.Model.GetEntityTypes()
                      .SelectMany(t => t.GetProperties())
                      .Where(p => p.ClrType == typeof(decimal) || p.ClrType == typeof(decimal?)))

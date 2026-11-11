@@ -33,8 +33,8 @@ namespace DineDesk.Api.Data.Migrations
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     DayOfWeek = table.Column<int>(type: "int", nullable: false),
-                    StartsAt = table.Column<TimeSpan>(type: "time", nullable: false),
-                    EndsAt = table.Column<TimeSpan>(type: "time", nullable: false),
+                    StartsAt = table.Column<long>(type: "bigint", nullable: false),
+                    EndsAt = table.Column<long>(type: "bigint", nullable: false),
                     DiscountPercentage = table.Column<decimal>(type: "decimal(18,2)", nullable: false)
                 },
                 constraints: table =>

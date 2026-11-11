@@ -1,5 +1,7 @@
 using DineDesk.Api.Data;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -49,6 +51,21 @@ public class DineDeskApiFactory : WebApplicationFactory<Program>
             }
 
             services.AddDbContext<DineDeskDbContext>(options => options.UseSqlite(_connectionString));
+
+            // Surface the real exception in the ProblemDetails body on a 500 instead of a
+            // generic message, so a failing test's output tells you what actually broke.
+            services.PostConfigure<ProblemDetailsOptions>(o =>
+            {
+                var previous = o.CustomizeProblemDetails;
+                o.CustomizeProblemDetails = ctx =>
+                {
+                    previous?.Invoke(ctx);
+                    if (ctx.HttpContext.Features.Get<IExceptionHandlerFeature>()?.Error is { } ex)
+                    {
+                        ctx.ProblemDetails.Extensions["exception"] = ex.ToString();
+                    }
+                };
+            });
         });
     }
 

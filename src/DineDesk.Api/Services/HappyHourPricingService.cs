@@ -30,10 +30,12 @@ public class HappyHourPricingService : IHappyHourPricingService
         var dayOfWeek = nowLocal.DayOfWeek;
         var timeOfDay = nowLocal.TimeOfDay;
 
-        var activeWindow = await _db.HappyHourWindows
+        // SQLite can't translate ORDER BY on a decimal column, and this table is tiny, so pick
+        // the best-matching window client-side once the candidates are loaded.
+        var candidates = await _db.HappyHourWindows
             .Where(w => w.DayOfWeek == dayOfWeek && w.StartsAt <= timeOfDay && w.EndsAt > timeOfDay)
-            .OrderByDescending(w => w.DiscountPercentage)
-            .FirstOrDefaultAsync();
+            .ToListAsync();
+        var activeWindow = candidates.OrderByDescending(w => w.DiscountPercentage).FirstOrDefault();
 
         if (activeWindow is null)
         {
