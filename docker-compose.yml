@@ -20,7 +20,7 @@ services:
       context: .
       dockerfile: src/DineDesk.Api/Dockerfile
     environment:
-      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__DineDesk: "Server=sqlserver,1433;Database=DineDesk;User Id=sa;Password=Your_password123;TrustServerCertificate=True"
     ports:
       - "8080:8080"
@@ -33,7 +33,7 @@ services:
       context: .
       dockerfile: src/DineDesk.Web/Dockerfile
     environment:
-      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_ENVIRONMENT: Development
       Api__BaseUrl: "http://api:8080"
     ports:
       - "8081:8080"
