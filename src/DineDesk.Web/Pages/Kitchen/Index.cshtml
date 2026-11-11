@@ -1,0 +1,59 @@
+@page
+@model DineDesk.Web.Pages.Kitchen.IndexModel
+@{
+    ViewData["Title"] = "Kitchen queue";
+}
+
+<h1 class="mb-4">Kitchen Queue</h1>
+
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="alert alert-danger">@Model.ErrorMessage</div>
+}
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Table</th>
+            <th>Item</th>
+            <th>Qty</th>
+            <th>Status</th>
+            <th>Placed</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model.Queue)
+        {
+            <tr>
+                <td>@item.TableNumber</td>
+                <td>@item.MenuItemName</td>
+                <td>@item.Quantity</td>
+                <td><span class="badge bg-secondary">@item.Status</span></td>
+                <td>@item.PlacedAtUtc.ToLocalTime().ToString("t")</td>
+                <td class="d-flex gap-2">
+                    @{
+                        var nextStatus = Model.GetNextStatus(item.Status);
+                    }
+                    @if (nextStatus is not null)
+                    {
+                        <form method="post" asp-page-handler="Advance">
+                            <input type="hidden" name="ItemId" value="@item.Id" />
+                            <input type="hidden" name="NewStatus" value="@nextStatus" />
+                            <input type="hidden" name="ETag" value="@item.ETag" />
+                            <button type="submit" class="btn btn-sm btn-primary">Mark @nextStatus</button>
+                        </form>
+                    }
+                    @if (User.IsInRole("Manager") || User.IsInRole("Admin"))
+                    {
+                        <form method="post" asp-page-handler="Void" class="d-flex gap-1">
+                            <input type="hidden" name="ItemId" value="@item.Id" />
+                            <input type="text" name="Reason" class="form-control form-control-sm" placeholder="Void reason" required />
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Void</button>
+                        </form>
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
