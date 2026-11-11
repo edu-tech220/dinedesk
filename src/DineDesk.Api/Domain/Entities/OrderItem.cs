@@ -24,5 +24,5 @@ public class OrderItem
 
     public string? VoidReason { get; set; }
 
-    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+    public byte[] RowVersion { get; set; } = null!;
 }

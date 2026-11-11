@@ -8,7 +8,7 @@ public class Ingredient
     public decimal QuantityInStock { get; set; }
     public decimal ReorderThreshold { get; set; }
 
-    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+    public byte[] RowVersion { get; set; } = null!;
 
     public ICollection<MenuItemIngredient> UsedIn { get; set; } = new List<MenuItemIngredient>();
 }

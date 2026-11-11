@@ -86,6 +86,17 @@ public class DineDeskDbContext : DbContext
             .HasForeignKey(p => p.TabId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // Store as ticks (a plain integer) rather than relying on each provider's native time
+        // type, so the StartsAt/EndsAt range comparisons in HappyHourPricingService translate
+        // the same way on SQL Server and SQLite.
+        modelBuilder.Entity<HappyHourWindow>()
+            .Property(w => w.StartsAt)
+            .HasConversion(v => v.Ticks, v => TimeSpan.FromTicks(v));
+
+        modelBuilder.Entity<HappyHourWindow>()
+            .Property(w => w.EndsAt)
+            .HasConversion(v => v.Ticks, v => TimeSpan.FromTicks(v));
+
         foreach (var decimalProperty in modelBuilder.Model.GetEntityTypes()
                      .SelectMany(t => t.GetProperties())
                      .Where(p => p.ClrType == typeof(decimal) || p.ClrType == typeof(decimal?)))
@@ -102,10 +113,42 @@ public class DineDeskDbContext : DbContext
         }
         else
         {
-            property
-                .IsConcurrencyToken()
-                .ValueGeneratedOnAddOrUpdate()
-                .HasValueGenerator<RowVersionValueGenerator>();
+            // No native rowversion/timestamp column on this provider: keep it a plain column
+            // (ValueGenerated stays Never, so it's never excluded from INSERT/UPDATE) and stamp
+            // a fresh token ourselves on every save - see StampPortableRowVersions below.
+            property.IsConcurrencyToken();
+        }
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        if (!Database.IsSqlServer())
+        {
+            StampPortableRowVersions();
+        }
+
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        if (!Database.IsSqlServer())
+        {
+            StampPortableRowVersions();
+        }
+
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void StampPortableRowVersions()
+    {
+        foreach (var entry in ChangeTracker.Entries().Where(e => e.State is EntityState.Added or EntityState.Modified))
+        {
+            var rowVersionProperty = entry.Properties.FirstOrDefault(p => p.Metadata.Name == nameof(Ingredient.RowVersion));
+            if (rowVersionProperty is not null)
+            {
+                rowVersionProperty.CurrentValue = Guid.NewGuid().ToByteArray();
+            }
         }
     }
 }

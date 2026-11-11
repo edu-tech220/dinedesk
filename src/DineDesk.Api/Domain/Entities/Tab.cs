@@ -20,7 +20,7 @@ public class Tab
 
     public decimal TipAmount { get; set; }
 
-    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+    public byte[] RowVersion { get; set; } = null!;
 
     public ICollection<Order> Orders { get; set; } = new List<Order>();
     public ICollection<Payment> Payments { get; set; } = new List<Payment>();
