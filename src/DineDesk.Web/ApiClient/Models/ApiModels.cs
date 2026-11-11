@@ -10,6 +10,8 @@ public record OpenTabRequest(int GuestCount);
 
 public record OpenTabResponse(int TabId, int DiningTableId, DateTime OpenedAtUtc);
 
+public record OpenTabIdResponse(int TabId);
+
 public record TabItemResponse(int Id, string MenuItemName, int Quantity, decimal UnitPrice, string Status, string? GuestLabel, string ETag);
 
 public record TabOrderResponse(int OrderId, DateTime PlacedAtUtc, IReadOnlyList<TabItemResponse> Items);

@@ -1,0 +1,34 @@
+@page
+@model DineDesk.Web.Pages.LoginModel
+@{
+    ViewData["Title"] = "Sign in";
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-5">
+        <h1 class="mb-4">Sign in to DineDesk</h1>
+
+        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+        {
+            <div class="alert alert-danger">@Model.ErrorMessage</div>
+        }
+
+        <form method="post">
+            <div class="mb-3">
+                <label asp-for="Username" class="form-label">Username</label>
+                <input asp-for="Username" class="form-control" autocomplete="username" />
+            </div>
+            <div class="mb-3">
+                <label asp-for="Password" class="form-label">Password</label>
+                <input asp-for="Password" type="password" class="form-control" autocomplete="current-password" />
+            </div>
+            <button type="submit" class="btn btn-primary">Sign in</button>
+        </form>
+
+        <hr />
+        <p class="text-muted small">
+            Demo accounts: <code>admin / Admin#12345</code>, <code>manager / Manager#12345</code>,
+            <code>server1 / Server#12345</code>, <code>kitchen1 / Kitchen#12345</code>.
+        </p>
+    </div>
+</div>

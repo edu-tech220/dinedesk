@@ -1,11 +1,17 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using DineDesk.Web.ApiClient.Models;
 
 namespace DineDesk.Web.ApiClient;
 
 public class DineDeskApiClient
 {
+    // The API serializes with ASP.NET Core's camelCase defaults; the plain default
+    // JsonSerializerOptions used by System.Net.Http.Json is case-sensitive, so without
+    // this every response would deserialize into all-default property values.
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     private readonly HttpClient _httpClient;
 
     public DineDeskApiClient(HttpClient httpClient)
@@ -21,6 +27,9 @@ public class DineDeskApiClient
 
     public Task<ApiResult<OpenTabResponse>> OpenTabAsync(int tableId, int guestCount) =>
         PostAsync<OpenTabRequest, OpenTabResponse>($"api/tables/{tableId}/open-tab", new OpenTabRequest(guestCount));
+
+    public Task<ApiResult<OpenTabIdResponse>> GetOpenTabIdAsync(int tableId) =>
+        GetAsync<OpenTabIdResponse>($"api/tables/{tableId}/open-tab");
 
     public Task<ApiResult<TabResponse>> GetTabAsync(int tabId) =>
         GetAsync<TabResponse>($"api/tabs/{tabId}");
@@ -82,13 +91,13 @@ public class DineDeskApiClient
             return ApiResult<TResponse>.Failure(await ReadErrorAsync(response));
         }
 
-        var value = await response.Content.ReadFromJsonAsync<TResponse>();
+        var value = await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions);
         return ApiResult<TResponse>.Success(value!);
     }
 
     private async Task<ApiResult<TResponse>> PostAsync<TRequest, TResponse>(string url, TRequest body)
     {
-        var response = await _httpClient.PostAsJsonAsync(url, body);
+        var response = await _httpClient.PostAsJsonAsync(url, body, JsonOptions);
         if (!response.IsSuccessStatusCode)
         {
             return ApiResult<TResponse>.Failure(await ReadErrorAsync(response));
@@ -99,13 +108,13 @@ public class DineDeskApiClient
             return ApiResult<TResponse>.Success(default!);
         }
 
-        var value = await response.Content.ReadFromJsonAsync<TResponse>();
+        var value = await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions);
         return ApiResult<TResponse>.Success(value!);
     }
 
     private async Task<ApiResult<bool>> PostNoContentAsync<TRequest>(string url, TRequest body)
     {
-        var response = await _httpClient.PostAsJsonAsync(url, body);
+        var response = await _httpClient.PostAsJsonAsync(url, body, JsonOptions);
         return response.IsSuccessStatusCode
             ? ApiResult<bool>.Success(true)
             : ApiResult<bool>.Failure(await ReadErrorAsync(response));
@@ -113,7 +122,7 @@ public class DineDeskApiClient
 
     private async Task<ApiResult<bool>> PatchNoContentAsync<TRequest>(string url, TRequest body, string eTag)
     {
-        var request = new HttpRequestMessage(HttpMethod.Patch, url) { Content = JsonContent.Create(body) };
+        var request = new HttpRequestMessage(HttpMethod.Patch, url) { Content = JsonContent.Create(body, options: JsonOptions) };
         request.Headers.IfMatch.Add(new EntityTagHeaderValue($"\"{eTag}\""));
 
         var response = await _httpClient.SendAsync(request);
@@ -126,13 +135,13 @@ public class DineDeskApiClient
     {
         try
         {
-            var problem = await response.Content.ReadFromJsonAsync<ApiProblem>();
+            var problem = await response.Content.ReadFromJsonAsync<ApiProblem>(JsonOptions);
             if (!string.IsNullOrWhiteSpace(problem?.Detail))
             {
                 return problem.Detail;
             }
         }
-        catch (Exception ex) when (ex is System.Text.Json.JsonException or NotSupportedException)
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
         {
             // Response body wasn't a ProblemDetails JSON payload; fall back below.
         }

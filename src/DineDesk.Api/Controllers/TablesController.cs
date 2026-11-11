@@ -23,6 +23,13 @@ public class TablesController : ApiControllerBase
         return Ok(tables.Select(t => new DiningTableResponse(t.Id, t.Number, t.Capacity, t.Status)));
     }
 
+    [HttpGet("{id:int}/open-tab")]
+    public async Task<IActionResult> GetOpenTab(int id)
+    {
+        var result = await _tabService.GetOpenTabIdForTableAsync(id);
+        return FromResult(result, tabId => Ok(new { tabId }));
+    }
+
     [HttpPost("{id:int}/open-tab")]
     [Authorize(Roles = "Server,Manager,Admin")]
     public async Task<IActionResult> OpenTab(int id, [FromBody] OpenTabRequest request)

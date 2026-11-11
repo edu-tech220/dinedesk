@@ -23,6 +23,8 @@ public interface ITabService
 
     Task<ServiceResult<Tab>> OpenTabAsync(int tableId, int guestCount, int openedByUserId);
 
+    Task<ServiceResult<int>> GetOpenTabIdForTableAsync(int tableId);
+
     Task<ServiceResult<TabDetail>> GetTabAsync(int tabId);
 
     Task<ServiceResult<BillSummary>> GetBillAsync(int tabId);
@@ -88,6 +90,19 @@ public class TabService : ITabService
 
         await _db.SaveChangesAsync();
         return ServiceResult<Tab>.Success(tab);
+    }
+
+    public async Task<ServiceResult<int>> GetOpenTabIdForTableAsync(int tableId)
+    {
+        var tab = await _db.Tabs
+            .AsNoTracking()
+            .Where(t => t.DiningTableId == tableId && t.Status == TabStatus.Open)
+            .OrderByDescending(t => t.OpenedAtUtc)
+            .FirstOrDefaultAsync();
+
+        return tab is null
+            ? ServiceResult<int>.Failure("This table has no open tab.", ServiceErrorType.NotFound)
+            : ServiceResult<int>.Success(tab.Id);
     }
 
     public async Task<ServiceResult<TabDetail>> GetTabAsync(int tabId)
